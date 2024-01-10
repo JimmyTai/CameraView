@@ -20,7 +20,6 @@ import android.graphics.Bitmap;
 import android.opengl.EGL14;
 import android.opengl.EGLSurface;
 import android.opengl.GLES20;
-import android.util.Log;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -28,6 +27,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+
+import dev.jimmytai.camera_view.utils.Logger;
 
 /*
  * This file is duplicated from "Google/grafica".
@@ -55,6 +56,7 @@ public class EglSurfaceBase {
     /**
      * Creates a window surface.
      * <p>
+     *
      * @param surface May be a Surface or SurfaceTexture.
      */
     public void createWindowSurface(Object surface) {
@@ -139,7 +141,7 @@ public class EglSurfaceBase {
     public boolean swapBuffers() {
         boolean result = mEglCore.swapBuffers(mEGLSurface);
         if (!result) {
-            Log.d(TAG, "WARNING: swapBuffers() failed");
+            Logger.d(TAG, "WARNING: swapBuffers() failed", null);
         }
         return result;
     }
@@ -196,20 +198,20 @@ public class EglSurfaceBase {
         } finally {
             if (bos != null) bos.close();
         }
-        Log.d(TAG, "Saved " + width + "x" + height + " frame as '" + filename + "'");
+        Logger.d(TAG, "Saved " + width + "x" + height + " frame as '" + filename + "'", null);
     }
 
     private void checkGlError(String op) {
         int error;
         if ((error = GLES20.glGetError()) != GLES20.GL_NO_ERROR) {
             // throw new RuntimeException(op + ": glError " + error);
-            Log.e(TAG, op + ": glError " + error);
+            Logger.e(TAG, op + ": glError " + error, null);
             java.util.Map<Thread, StackTraceElement[]> ts = Thread
                     .getAllStackTraces();
             StackTraceElement[] ste = ts.get(Thread.currentThread());
             if (ste != null) {
                 for (StackTraceElement s : ste) {
-                    Log.e(TAG, s.toString());
+                    Logger.e(TAG, s.toString(), null);
                 }
             }
         }

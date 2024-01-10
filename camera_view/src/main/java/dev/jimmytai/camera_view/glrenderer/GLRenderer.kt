@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Point
 import android.opengl.GLES20
 import android.opengl.Matrix
-import android.widget.ImageView
+import dev.jimmytai.camera_view.constant.CropScaleType
 import dev.jimmytai.camera_view.constant.PixelFormat
 import dev.jimmytai.camera_view.constant.TextureFormat
 import dev.jimmytai.camera_view.gles.GlUtil
@@ -30,7 +30,7 @@ class GLRenderer {
     private var mProgramManager: ShaderProgramManager? = null
 
     private val programManager: ShaderProgramManager
-        get() = mProgramManager ?: ShaderProgramManager()
+        get() = mProgramManager ?: ShaderProgramManager().also { mProgramManager = it }
 
     /**
      * 默认的离屏渲染绑定的纹理
@@ -413,7 +413,7 @@ class GLRenderer {
         /**
          * @brief 镜像
          */
-        fun flip(x: Boolean, y: Boolean): Transition {
+        fun flip(x: Boolean = false, y: Boolean = false): Transition {
             Matrix4Util.flip(mMVPMatrix, x, y)
             return this
         }
@@ -429,7 +429,7 @@ class GLRenderer {
         }
 
         fun crop(
-            scaleType: ImageView.ScaleType, rotation: Int,
+            scaleType: CropScaleType, rotation: Int,
             textureWidth: Int, textureHeight: Int, surfaceWidth: Int, surfaceHeight: Int
         ): Transition {
             if (rotation % 180 == 90) {
@@ -453,7 +453,7 @@ class GLRenderer {
          * 如将先镜像再旋转，逆序为先旋转再镜像
          */
         fun reverse(): Transition {
-            val invertedMatrix: FloatArray = FloatArray(16)
+            val invertedMatrix = FloatArray(16)
             if (Matrix.invertM(invertedMatrix, 0, mMVPMatrix, 0)) {
                 mMVPMatrix = invertedMatrix
             }

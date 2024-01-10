@@ -13,7 +13,7 @@ import java.nio.ByteBuffer
  * Porting from BytePlus and make a little improvement.
  */
 
-abstract class ShaderProgram(private val vertexShader: String, private val fragmentShader: String) {
+abstract class ShaderProgram(vertexShader: String, fragmentShader: String) {
     companion object {
         private val TAG: String = ShaderProgram::class.java.simpleName
 
@@ -42,6 +42,10 @@ abstract class ShaderProgram(private val vertexShader: String, private val fragm
         context.readTextFileFromResource(vertexShaderResId),
         context.readTextFileFromResource(fragmentShaderResId)
     )
+
+    init {
+        this.getLocations()
+    }
 
     abstract fun getDrawable2D(): Drawable2d
 

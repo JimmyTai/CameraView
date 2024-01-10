@@ -26,6 +26,8 @@ import android.opengl.EGLSurface;
 import android.util.Log;
 import android.view.Surface;
 
+import dev.jimmytai.camera_view.utils.Logger;
+
 /*
  * This file is duplicated from "Google/grafica".
  */
@@ -96,7 +98,7 @@ public final class EglCore {
 
         // Try to get a GLES3 context, if requested.
         if ((flags & FLAG_TRY_GLES3) != 0) {
-            //Log.d(TAG, "Trying GLES 3");
+            //Logger.d(TAG, "Trying GLES 3", null);
             EGLConfig config = getConfig(flags, 3);
             if (config != null) {
                 int[] attrib3_list = {
@@ -107,7 +109,7 @@ public final class EglCore {
                         attrib3_list, 0);
 
                 if (EGL14.eglGetError() == EGL14.EGL_SUCCESS) {
-                    //Log.d(TAG, "Got GLES 3 config");
+                    //Logger.d(TAG, "Got GLES 3 config", null);
                     mEGLConfig = config;
                     mEGLContext = context;
                     mGlVersion = 3;
@@ -115,7 +117,7 @@ public final class EglCore {
             }
         }
         if (mEGLContext == EGL14.EGL_NO_CONTEXT) {  // GLES 2 only, or GLES 3 attempt failed
-            //Log.d(TAG, "Trying GLES 2");
+            //Logger.d(TAG, "Trying GLES 2", null);
             EGLConfig config = getConfig(flags, 2);
             if (config == null) {
                 throw new RuntimeException("Unable to find a suitable EGLConfig");
@@ -136,7 +138,7 @@ public final class EglCore {
         int[] values = new int[1];
         EGL14.eglQueryContext(mEGLDisplay, mEGLContext, EGL14.EGL_CONTEXT_CLIENT_VERSION,
                 values, 0);
-        Log.d(TAG, "EGLContext created, client version " + values[0]);
+        Logger.d(TAG, "EGLContext created, client version " + values[0], null);
     }
 
     /**
@@ -173,7 +175,7 @@ public final class EglCore {
         int[] numConfigs = new int[1];
         if (!EGL14.eglChooseConfig(mEGLDisplay, attribList, 0, configs, 0, configs.length,
                 numConfigs, 0)) {
-            Log.w(TAG, "unable to find RGB8888 / " + version + " EGLConfig");
+            Logger.w(TAG, "unable to find RGB8888 / " + version + " EGLConfig", null);
             return null;
         }
         return configs[0];
@@ -209,7 +211,7 @@ public final class EglCore {
                 // the EGL state, so if a surface or context is still current on another
                 // thread we can't fully release it here.  Exceptions thrown from here
                 // are quietly discarded.  Complain in the log file.
-                Log.w(TAG, "WARNING: EglCore was not explicitly released -- state may be leaked");
+                Logger.w(TAG, "WARNING: EglCore was not explicitly released -- state may be leaked", null);
                 release();
             }
         } finally {
@@ -272,7 +274,7 @@ public final class EglCore {
     public void makeCurrent(EGLSurface eglSurface) {
         if (mEGLDisplay == EGL14.EGL_NO_DISPLAY) {
             // called makeCurrent() before create?
-            Log.d(TAG, "NOTE: makeCurrent w/o display");
+            Logger.d(TAG, "NOTE: makeCurrent w/o display", null);
         }
         if (!EGL14.eglMakeCurrent(mEGLDisplay, eglSurface, eglSurface, mEGLContext)) {
             throw new RuntimeException("eglMakeCurrent failed");
@@ -285,7 +287,7 @@ public final class EglCore {
     public void makeCurrent(EGLSurface drawSurface, EGLSurface readSurface) {
         if (mEGLDisplay == EGL14.EGL_NO_DISPLAY) {
             // called makeCurrent() before create?
-            Log.d(TAG, "NOTE: makeCurrent w/o display");
+            Logger.d(TAG, "NOTE: makeCurrent w/o display", null);
         }
         if (!EGL14.eglMakeCurrent(mEGLDisplay, drawSurface, readSurface, mEGLContext)) {
             throw new RuntimeException("eglMakeCurrent(draw,read) failed");
@@ -360,8 +362,8 @@ public final class EglCore {
         display = EGL14.eglGetCurrentDisplay();
         context = EGL14.eglGetCurrentContext();
         surface = EGL14.eglGetCurrentSurface(EGL14.EGL_DRAW);
-        Log.i(TAG, "Current EGL (" + msg + "): display=" + display + ", context=" + context +
-                ", surface=" + surface);
+        Logger.i(TAG, "Current EGL (" + msg + "): display=" + display + ", context=" + context +
+                ", surface=" + surface, null);
     }
 
     /**

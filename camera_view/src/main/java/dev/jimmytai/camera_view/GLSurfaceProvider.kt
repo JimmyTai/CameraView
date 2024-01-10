@@ -1,7 +1,6 @@
 package dev.jimmytai.camera_view
 
 import android.graphics.SurfaceTexture
-import android.util.Log
 import android.util.Size
 import android.view.Surface
 import android.view.SurfaceView
@@ -9,9 +8,13 @@ import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
 import dev.jimmytai.camera_view.glthread.GLThreadCallback
 import dev.jimmytai.camera_view.glthread.SurfaceViewGLThread
+import dev.jimmytai.camera_view.utils.Logger
 import java.util.concurrent.Executors
 
 class GLSurfaceProvider(surfaceView: SurfaceView) : Preview.SurfaceProvider, GLThreadCallback {
+    companion object {
+        private val TAG: String = GLSurfaceProvider::class.java.simpleName
+    }
 
     private val glThread: SurfaceViewGLThread = SurfaceViewGLThread("GL_THREAD", surfaceView, this)
     private var mSurfaceTexture: SurfaceTexture? = null
@@ -21,6 +24,7 @@ class GLSurfaceProvider(surfaceView: SurfaceView) : Preview.SurfaceProvider, GLT
     }
 
     override fun onCreateSurfaceTexture(surfaceTexture: SurfaceTexture) {
+        Logger.d(TAG, "onCreateSurfaceTexture")
         mSurfaceTexture = surfaceTexture
         setOnFrameAvailableListener()
     }
@@ -41,8 +45,8 @@ class GLSurfaceProvider(surfaceView: SurfaceView) : Preview.SurfaceProvider, GLT
 
     override fun onSurfaceRequested(request: SurfaceRequest) {
         val resolution: Size = request.resolution
-        Log.d("Jimmy", "resolution size: $resolution")
         request.setTransformationInfoListener(Executors.newSingleThreadExecutor()) { transformationInfo ->
+            Logger.d(TAG, "resolution size: $resolution, rotation: ${transformationInfo.rotationDegrees}")
             glThread.onCameraSizeChange(
                 resolution.width,
                 resolution.height,

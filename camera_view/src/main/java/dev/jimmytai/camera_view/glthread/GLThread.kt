@@ -5,9 +5,12 @@ import android.opengl.GLES20
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Process
+import dev.jimmytai.camera_view.constant.CropScaleType
+import dev.jimmytai.camera_view.constant.TextureFormat
 import dev.jimmytai.camera_view.gles.EglCore
 import dev.jimmytai.camera_view.gles.GlUtil
 import dev.jimmytai.camera_view.gles.WindowSurface
+import dev.jimmytai.camera_view.glrenderer.GLRenderer
 import dev.jimmytai.camera_view.utils.Logger
 
 abstract class GLThread(
@@ -17,7 +20,7 @@ abstract class GLThread(
 ) :
     HandlerThread(name, priority) {
     companion object {
-        private val TAG = GLThread::class.java.name
+        val TAG: String = GLThread::class.java.simpleName
 
         // 初始化OpenGL環境
         const val INIT: Int = 0
@@ -29,10 +32,12 @@ abstract class GLThread(
         const val RELEASE: Int = 2
     }
 
-    protected var mHandler: Handler? = null
+    private var mHandler: Handler? = null
 
     private var mEglCore: EglCore? = null
     private var mWindowSurface: WindowSurface? = null
+
+    private var mGLRenderer: GLRenderer = GLRenderer()
 
     private var mCameraOesTextureId: Int = -1
     private var mSurfaceTexture: SurfaceTexture? = null
@@ -41,8 +46,8 @@ abstract class GLThread(
     private var mCameraHeight: Int = -1
     private var mCameraRotationDegrees: Int = 0
 
-    protected var mCameraSizeChanged: Boolean = true
-    protected var mPreviewSizeChanged: Boolean = true
+    protected var mSurfaceViewWidth: Int = -1
+    protected var mSurfaceViewHeight: Int = -1
 
     /**
      * This function will be triggered after OpenGL engine initialized.
@@ -72,10 +77,18 @@ abstract class GLThread(
     }
 
     fun onCameraSizeChange(width: Int, height: Int, rotationDegrees: Int) {
-        mCameraWidth = width
-        mCameraHeight = height
+        Logger.d(
+            TAG,
+            "onCameraSizeChange -> width: $width, height: $height, rotation: $rotationDegrees"
+        )
+        if (rotationDegrees % 180 == 90) {
+            mCameraWidth = height
+            mCameraHeight = width
+        } else {
+            mCameraWidth = width
+            mCameraHeight = height
+        }
         mCameraRotationDegrees = rotationDegrees
-        mCameraSizeChanged = true
     }
 
     override fun start() {
@@ -103,6 +116,7 @@ abstract class GLThread(
     }
 
     private fun onInitGL() {
+        Logger.d(TAG, "onInitGL")
         var eglCore: EglCore? = mEglCore
         if (eglCore == null) {
             eglCore = EglCore(null, 0)
@@ -113,12 +127,14 @@ abstract class GLThread(
         mWindowSurface = null
         mWindowSurface = createWindowSurface(eglCore)
 
-        GlUtil.releaseTextureId(mCameraOesTextureId)
-        mCameraOesTextureId = GlUtil.createExternalOESTextureId()
+        if (mSurfaceTexture == null) {
+            GlUtil.releaseTextureId(mCameraOesTextureId)
+            mCameraOesTextureId = GlUtil.createExternalOESTextureId()
 
-        val surfaceTexture = SurfaceTexture(mCameraOesTextureId)
-        mSurfaceTexture = surfaceTexture
-        callback?.onCreateSurfaceTexture(surfaceTexture)
+            val surfaceTexture = SurfaceTexture(mCameraOesTextureId)
+            mSurfaceTexture = surfaceTexture
+        }
+        callback?.onCreateSurfaceTexture(mSurfaceTexture!!)
 
         callback?.onGLContextCreated()
     }
@@ -129,14 +145,43 @@ abstract class GLThread(
 
         surfaceTexture.updateTexImage()
 
-        if (mCameraSizeChanged || mPreviewSizeChanged) {
-//            GlUtil.releaseTextureId(mConvertedTextureId)
-//            mConvertedTextureId = GlUtil.createTexture(mCameraWidth, mCameraHeight, GLES20.GL_RGBA)
-        }
-
         // 清空缓冲区颜色
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+
+        val transition: GLRenderer.Transition =
+            GLRenderer.Transition().rotate(mCameraRotationDegrees.toFloat())
+                .flip(x = false, y = true)
+        val textureId: Int = mGLRenderer.transferTextureToTexture(
+            mCameraOesTextureId,
+            TextureFormat.TextureOES,
+            TextureFormat.Texture2D,
+            mCameraWidth,
+            mCameraHeight,
+            transition
+        )
+
+        val processedTextureId: Int =
+            callback?.onCustomProcessTexture(textureId, mCameraWidth, mCameraHeight) ?: textureId
+
+        if (!GLES20.glIsTexture(processedTextureId)) {
+            Logger.e(TAG, "output texture not a valid texture")
+            return
+        }
+
+        val onScreenTransition: GLRenderer.Transition =
+            GLRenderer.Transition()
+                .crop(
+                    CropScaleType.CENTER_CROP, 0,
+                    mCameraWidth, mCameraHeight, mSurfaceViewWidth, mSurfaceViewHeight
+                )
+        mGLRenderer.transferTextureToScreen(
+            processedTextureId,
+            TextureFormat.Texture2D,
+            mSurfaceViewWidth,
+            mSurfaceViewHeight,
+            onScreenTransition.matrix
+        )
 
         windowSurface.swapBuffers()
     }
@@ -145,6 +190,8 @@ abstract class GLThread(
         Logger.d(TAG, "onRelease: ${Thread.currentThread().name}")
         callback?.onGLContextDestroy()
         releaseInputData()
+
+        mGLRenderer.release()
 
         mWindowSurface?.release()
         mWindowSurface = null

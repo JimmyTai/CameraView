@@ -1,12 +1,12 @@
 package dev.jimmytai.camera_view.gles
 
 import android.opengl.Matrix
-import android.widget.ImageView
+import dev.jimmytai.camera_view.constant.CropScaleType
 
 object Matrix4Util {
     fun crop(
         matrix: FloatArray?,
-        type: ImageView.ScaleType,
+        type: CropScaleType,
         imgWidth: Int,
         imgHeight: Int,
         viewWidth: Int,
@@ -15,7 +15,7 @@ object Matrix4Util {
         if (imgHeight > 0 && imgWidth > 0 && viewWidth > 0 && viewHeight > 0) {
             val projection = FloatArray(16)
             val camera = FloatArray(16)
-            if (type == ImageView.ScaleType.FIT_XY) {
+            if (type == CropScaleType.FIT_XY) {
                 Matrix.orthoM(projection, 0, -1f, 1f, -1f, 1f, 1f, 3f)
                 Matrix.setLookAtM(camera, 0, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f)
                 Matrix.multiplyMM(matrix, 0, projection, 0, camera, 0)
@@ -24,7 +24,7 @@ object Matrix4Util {
             val sWhImg = imgWidth.toFloat() / imgHeight
             if (sWhImg > sWhView) {
                 when (type) {
-                    ImageView.ScaleType.CENTER_CROP -> {
+                    CropScaleType.CENTER_CROP -> {
                         Matrix.orthoM(
                             projection,
                             0,
@@ -38,7 +38,7 @@ object Matrix4Util {
                         Matrix.scaleM(projection, 0, GlUtil.X_SCALE, GlUtil.Y_SCALE, 1f)
                     }
 
-                    ImageView.ScaleType.CENTER_INSIDE -> Matrix.orthoM(
+                    CropScaleType.CENTER_INSIDE -> Matrix.orthoM(
                         projection,
                         0,
                         -1f,
@@ -49,7 +49,7 @@ object Matrix4Util {
                         3f
                     )
 
-                    ImageView.ScaleType.FIT_START -> Matrix.orthoM(
+                    CropScaleType.FIT_START -> Matrix.orthoM(
                         projection,
                         0,
                         -1f,
@@ -60,7 +60,7 @@ object Matrix4Util {
                         3f
                     )
 
-                    ImageView.ScaleType.FIT_END -> Matrix.orthoM(
+                    CropScaleType.FIT_END -> Matrix.orthoM(
                         projection,
                         0,
                         -1f,
@@ -75,7 +75,7 @@ object Matrix4Util {
                 }
             } else {
                 when (type) {
-                    ImageView.ScaleType.CENTER_CROP -> {
+                    CropScaleType.CENTER_CROP -> {
                         Matrix.orthoM(
                             projection,
                             0,
@@ -89,7 +89,7 @@ object Matrix4Util {
                         Matrix.scaleM(projection, 0, GlUtil.X_SCALE, GlUtil.Y_SCALE, 1f)
                     }
 
-                    ImageView.ScaleType.CENTER_INSIDE -> Matrix.orthoM(
+                    CropScaleType.CENTER_INSIDE -> Matrix.orthoM(
                         projection,
                         0,
                         -sWhView / sWhImg,
@@ -100,7 +100,7 @@ object Matrix4Util {
                         3f
                     )
 
-                    ImageView.ScaleType.FIT_START -> Matrix.orthoM(
+                    CropScaleType.FIT_START -> Matrix.orthoM(
                         projection,
                         0,
                         -1f,
@@ -111,7 +111,7 @@ object Matrix4Util {
                         3f
                     )
 
-                    ImageView.ScaleType.FIT_END -> Matrix.orthoM(
+                    CropScaleType.FIT_END -> Matrix.orthoM(
                         projection,
                         0,
                         1 - 2 * sWhView / sWhImg,

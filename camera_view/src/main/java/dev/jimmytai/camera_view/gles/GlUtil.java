@@ -23,13 +23,14 @@ import android.opengl.GLES30;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
 import android.util.Log;
-import android.widget.ImageView;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 
 import javax.microedition.khronos.opengles.GL10;
+
+import dev.jimmytai.camera_view.utils.Logger;
 
 /*
  * This file is duplicated from "Google/grafica".
@@ -66,9 +67,9 @@ public class GlUtil {
      * Writes GL version info to the log.
      */
     public static void logVersionInfo() {
-        Log.i(TAG, "vendor  : " + GLES20.glGetString(GLES20.GL_VENDOR));
-        Log.i(TAG, "renderer: " + GLES20.glGetString(GLES20.GL_RENDERER));
-        Log.i(TAG, "version : " + GLES20.glGetString(GLES20.GL_VERSION));
+        Logger.i(TAG, "vendor  : " + GLES20.glGetString(GLES20.GL_VENDOR), null);
+        Logger.i(TAG, "renderer: " + GLES20.glGetString(GLES20.GL_RENDERER), null);
+        Logger.i(TAG, "version : " + GLES20.glGetString(GLES20.GL_VERSION), null);
 
         if (false) {
             int[] values = new int[1];
@@ -77,7 +78,7 @@ public class GlUtil {
             GLES30.glGetIntegerv(GLES30.GL_MINOR_VERSION, values, 0);
             int minorVersion = values[0];
             if (GLES30.glGetError() == GLES30.GL_NO_ERROR) {
-                Log.i(TAG, "iversion: " + majorVersion + "." + minorVersion);
+                Logger.i(TAG, "iversion: " + majorVersion + "." + minorVersion, null);
             }
         }
     }
@@ -100,7 +101,7 @@ public class GlUtil {
         int program = GLES20.glCreateProgram();
         checkGlError("glCreateProgram");
         if (program == 0) {
-            Log.e(TAG, "Could not create program");
+            Logger.e(TAG, "Could not create program", null);
         }
         GLES20.glAttachShader(program, vertexShader);
         checkGlError("glAttachShader");
@@ -110,8 +111,8 @@ public class GlUtil {
         int[] linkStatus = new int[1];
         GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0);
         if (linkStatus[0] != GLES20.GL_TRUE) {
-            Log.e(TAG, "Could not link program: ");
-            Log.e(TAG, GLES20.glGetProgramInfoLog(program));
+            Logger.e(TAG, "Could not link program: ", null);
+            Logger.e(TAG, GLES20.glGetProgramInfoLog(program), null);
             GLES20.glDeleteProgram(program);
             program = 0;
         }
@@ -136,8 +137,8 @@ public class GlUtil {
         int[] compiled = new int[1];
         GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, compiled, 0);
         if (compiled[0] == 0) {
-            Log.e(TAG, "Could not compile shader " + shaderType + ":");
-            Log.e(TAG, " " + GLES20.glGetShaderInfoLog(shader));
+            Logger.e(TAG, "Could not compile shader " + shaderType + ":", null);
+            Logger.e(TAG, " " + GLES20.glGetShaderInfoLog(shader), null);
             GLES20.glDeleteShader(shader);
             shader = 0;
         }
@@ -151,7 +152,7 @@ public class GlUtil {
         int error = GLES20.glGetError();
         if (error != GLES20.GL_NO_ERROR) {
             String msg = op + ": glError 0x" + Integer.toHexString(error);
-            Log.e(TAG, msg);
+            Logger.e(TAG, msg, null);
         }
     }
 
@@ -163,7 +164,7 @@ public class GlUtil {
      */
     public static void checkLocation(int location, String label) {
         if (location < 0) {
-            Log.e(TAG, "Unable to locate '" + label + "' in program");
+            Logger.e(TAG, "Unable to locate '" + label + "' in program", null);
         }
     }
 
