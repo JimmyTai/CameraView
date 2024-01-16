@@ -69,4 +69,5 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     implementation(project(mapOf("path" to ":camera_view")))
+    implementation("org.wysaid:gpuimage-plus:3.0.0-min")
 }

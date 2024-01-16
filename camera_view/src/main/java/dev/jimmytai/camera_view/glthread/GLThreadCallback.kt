@@ -1,13 +1,10 @@
 package dev.jimmytai.camera_view.glthread
 
 import android.graphics.SurfaceTexture
+import android.util.Size
 
 interface GLThreadCallback {
     fun onCreateSurfaceTexture(surfaceTexture: SurfaceTexture)
 
-    fun onGLContextCreated()
-
-    fun onCustomProcessTexture(textureId: Int, textureWidth: Int, textureHeight: Int): Int
-
-    fun onGLContextDestroy()
+    fun onProcessTexture(textureId: Int, cameraSize: Size, surfaceSize: Size, transformMatrix: FloatArray): Int
 }

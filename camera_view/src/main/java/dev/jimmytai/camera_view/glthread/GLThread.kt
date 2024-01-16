@@ -2,9 +2,12 @@ package dev.jimmytai.camera_view.glthread
 
 import android.graphics.SurfaceTexture
 import android.opengl.GLES20
+import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Message
 import android.os.Process
+import android.util.Size
 import dev.jimmytai.camera_view.constant.CropScaleType
 import dev.jimmytai.camera_view.constant.TextureFormat
 import dev.jimmytai.camera_view.gles.EglCore
@@ -30,6 +33,26 @@ abstract class GLThread(
 
         // 銷毀OpenGL環境
         const val RELEASE: Int = 2
+
+        const val UPDATE_CAMERA_CONFIGS = 3
+
+        const val UPDATE_SURFACE_CONFIGS = 4
+
+        const val UPDATE_TEXTURE_PROCESS_CONFIGS: Int = 5
+    }
+
+    private object CameraConfigs {
+        const val SIZE = "size"
+        const val ROTATION_DEGREES = "rotation-degrees"
+    }
+
+    private object SurfaceConfigs {
+        const val SIZE = "size"
+    }
+
+    private object TextureProcessConfigs {
+        const val PRE_PROCESS_ENABLE = "pre-process-enable"
+        const val RENDER_ON_SCREEN_ENABLE = "render-on-screen-enable"
     }
 
     private var mHandler: Handler? = null
@@ -42,12 +65,22 @@ abstract class GLThread(
     private var mCameraOesTextureId: Int = -1
     private var mSurfaceTexture: SurfaceTexture? = null
 
-    private var mCameraWidth: Int = -1
-    private var mCameraHeight: Int = -1
+    private var mCameraSize: Size = Size(-1, -1)
     private var mCameraRotationDegrees: Int = 0
 
-    protected var mSurfaceViewWidth: Int = -1
-    protected var mSurfaceViewHeight: Int = -1
+    private var mSurfaceViewSize: Size = Size(-1, -1)
+
+    private var mTransformMatrix: FloatArray = FloatArray(16)
+
+    /**
+     * 是否要進行Texture的預處理
+     */
+    private var mTexturePreProcessEnable: Boolean = true
+
+    /**
+     *
+     */
+    private var mTextureRenderOnScreenEnable: Boolean = true
 
     /**
      * This function will be triggered after OpenGL engine initialized.
@@ -76,20 +109,51 @@ abstract class GLThread(
         mHandler?.sendEmptyMessage(RELEASE)
     }
 
-    fun onCameraSizeChange(width: Int, height: Int, rotationDegrees: Int) {
+    fun updateCameraConfigs(size: Size, rotationDegrees: Int) {
         Logger.d(
             TAG,
-            "onCameraSizeChange -> width: $width, height: $height, rotation: $rotationDegrees"
+            "updateCameraConfigs -> width: ${size.width}, height: ${size.height}, rotation: $rotationDegrees"
         )
-        if (rotationDegrees % 180 == 90) {
-            mCameraWidth = height
-            mCameraHeight = width
-        } else {
-            mCameraWidth = width
-            mCameraHeight = height
+        val message = Message().apply {
+            what = UPDATE_CAMERA_CONFIGS
         }
-        mCameraRotationDegrees = rotationDegrees
+        val bundle = Bundle().apply {
+            putSize(
+                CameraConfigs.SIZE, if (rotationDegrees % 180 == 90) {
+                    Size(size.height, size.width)
+                } else {
+                    Size(size.width, size.height)
+                }
+            )
+            putInt(CameraConfigs.ROTATION_DEGREES, rotationDegrees)
+        }
+        message.data = bundle
+        mHandler?.sendMessage(message)
     }
+
+    fun updateSurfaceConfigs(size: Size) {
+        val message = Message().apply {
+            what = UPDATE_SURFACE_CONFIGS
+        }
+        val bundle = Bundle().apply {
+            putSize(SurfaceConfigs.SIZE, size)
+        }
+        message.data = bundle
+        mHandler?.sendMessage(message)
+    }
+
+    fun updateTextureProcessConfigs(preProcessEnable: Boolean, renderOnScreenEnable: Boolean) {
+        val message = Message().apply {
+            what = UPDATE_TEXTURE_PROCESS_CONFIGS
+        }
+        val bundle = Bundle().apply {
+            putBoolean(TextureProcessConfigs.PRE_PROCESS_ENABLE, preProcessEnable)
+            putBoolean(TextureProcessConfigs.RENDER_ON_SCREEN_ENABLE, renderOnScreenEnable)
+        }
+        message.data = bundle
+        mHandler?.sendMessage(message)
+    }
+
 
     override fun start() {
         super.start()
@@ -107,6 +171,33 @@ abstract class GLThread(
 
                 RELEASE -> {
                     onRelease()
+                    true
+                }
+
+                UPDATE_CAMERA_CONFIGS -> {
+                    val size: Size? = msg.data.getSize(CameraConfigs.SIZE)
+                    if (size != null) {
+                        onUpdateCameraConfigs(
+                            size,
+                            msg.data.getInt(CameraConfigs.ROTATION_DEGREES)
+                        )
+                    }
+                    true
+                }
+
+                UPDATE_SURFACE_CONFIGS -> {
+                    val size: Size? = msg.data.getSize(SurfaceConfigs.SIZE)
+                    if (size != null) {
+                        onUpdateSurfaceConfigs(size)
+                    }
+                    true
+                }
+
+                UPDATE_TEXTURE_PROCESS_CONFIGS -> {
+                    onUpdateTextureProcessConfigs(
+                        msg.data.getBoolean(TextureProcessConfigs.PRE_PROCESS_ENABLE),
+                        msg.data.getBoolean(TextureProcessConfigs.RENDER_ON_SCREEN_ENABLE)
+                    )
                     true
                 }
 
@@ -135,60 +226,94 @@ abstract class GLThread(
             mSurfaceTexture = surfaceTexture
         }
         callback?.onCreateSurfaceTexture(mSurfaceTexture!!)
-
-        callback?.onGLContextCreated()
     }
 
+    private fun onUpdateCameraConfigs(size: Size, rotationDegrees: Int) {
+        mCameraSize = size
+        mCameraRotationDegrees = rotationDegrees
+    }
+
+    private fun onUpdateSurfaceConfigs(size: Size) {
+        mSurfaceViewSize = size
+    }
+
+    private fun onUpdateTextureProcessConfigs(
+        preProcessEnable: Boolean,
+        renderOnScreenEnable: Boolean
+    ) {
+        mTexturePreProcessEnable = preProcessEnable
+        mTextureRenderOnScreenEnable = renderOnScreenEnable
+    }
+
+    private var taskId = 0
+
     private fun onProcess() {
-        val windowSurface: WindowSurface = mWindowSurface ?: return
-        val surfaceTexture: SurfaceTexture = mSurfaceTexture ?: return
+        try {
+            val windowSurface: WindowSurface = mWindowSurface ?: return
+            val surfaceTexture: SurfaceTexture = mSurfaceTexture ?: return
 
-        surfaceTexture.updateTexImage()
+            surfaceTexture.updateTexImage()
+            surfaceTexture.getTransformMatrix(mTransformMatrix)
 
-        // 清空缓冲区颜色
-        GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f)
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+            var preProcessTextureId: Int = mCameraOesTextureId
+            if (mTexturePreProcessEnable) {
+                // 清空缓冲区颜色
+                GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f)
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
 
-        val transition: GLRenderer.Transition =
-            GLRenderer.Transition().rotate(mCameraRotationDegrees.toFloat())
-                .flip(x = false, y = true)
-        val textureId: Int = mGLRenderer.transferTextureToTexture(
-            mCameraOesTextureId,
-            TextureFormat.TextureOES,
-            TextureFormat.Texture2D,
-            mCameraWidth,
-            mCameraHeight,
-            transition
-        )
-
-        val processedTextureId: Int =
-            callback?.onCustomProcessTexture(textureId, mCameraWidth, mCameraHeight) ?: textureId
-
-        if (!GLES20.glIsTexture(processedTextureId)) {
-            Logger.e(TAG, "output texture not a valid texture")
-            return
-        }
-
-        val onScreenTransition: GLRenderer.Transition =
-            GLRenderer.Transition()
-                .crop(
-                    CropScaleType.CENTER_CROP, 0,
-                    mCameraWidth, mCameraHeight, mSurfaceViewWidth, mSurfaceViewHeight
+                val transition: GLRenderer.Transition =
+                    GLRenderer.Transition().rotate(mCameraRotationDegrees.toFloat())
+                        .flip(x = false, y = true)
+                preProcessTextureId = mGLRenderer.transferTextureToTexture(
+                    mCameraOesTextureId,
+                    TextureFormat.TextureOES,
+                    TextureFormat.Texture2D,
+                    mCameraSize.width,
+                    mCameraSize.height,
+                    transition
                 )
-        mGLRenderer.transferTextureToScreen(
-            processedTextureId,
-            TextureFormat.Texture2D,
-            mSurfaceViewWidth,
-            mSurfaceViewHeight,
-            onScreenTransition.matrix
-        )
+            }
 
-        windowSurface.swapBuffers()
+            val processedTextureId: Int = callback?.onProcessTexture(
+                preProcessTextureId,
+                mCameraSize,
+                mSurfaceViewSize,
+                mTransformMatrix
+            ) ?: preProcessTextureId
+
+            if (mTextureRenderOnScreenEnable) {
+                if (!GLES20.glIsTexture(processedTextureId)) {
+                    Logger.e(TAG, "output texture not a valid texture")
+                    return
+                }
+
+                val onScreenTransition: GLRenderer.Transition =
+                    GLRenderer.Transition()
+                        .crop(
+                            CropScaleType.CENTER_CROP,
+                            0,
+                            mCameraSize.width,
+                            mCameraSize.height,
+                            mSurfaceViewSize.width,
+                            mSurfaceViewSize.height
+                        )
+                mGLRenderer.transferTextureToScreen(
+                    processedTextureId,
+                    TextureFormat.Texture2D,
+                    mSurfaceViewSize.width,
+                    mSurfaceViewSize.height,
+                    onScreenTransition.matrix
+                )
+            }
+
+            windowSurface.swapBuffers()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun onRelease() {
         Logger.d(TAG, "onRelease: ${Thread.currentThread().name}")
-        callback?.onGLContextDestroy()
         releaseInputData()
 
         mGLRenderer.release()

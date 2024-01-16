@@ -10,6 +10,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven {
+            this.url = uri("https://maven.wysaid.org/")
+        }
     }
 }
 

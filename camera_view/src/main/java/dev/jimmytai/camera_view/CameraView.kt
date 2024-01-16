@@ -18,9 +18,6 @@ class CameraView(context: Context, attrs: AttributeSet?, defStyleAttr: Int, defS
 
     private var mCameraController: CameraController? = null
 
-    private val onCameraPreviewAction: CameraController.OnCameraPreviewAction =
-        object : CameraController.OnCameraPreviewAction {}
-
     constructor(context: Context) : this(context, null)
 
     constructor(context: Context, attrs: AttributeSet?) : this(context, attrs, 0)
@@ -41,11 +38,17 @@ class CameraView(context: Context, attrs: AttributeSet?, defStyleAttr: Int, defS
 
     fun setController(cameraController: CameraController) {
         mCameraController = cameraController
-        cameraController.attachFromView(surfaceView, onCameraPreviewAction)
+        cameraController.attachFromView(surfaceView)
     }
+
+    private var skipWindowFocusChange = true
 
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
         super.onWindowFocusChanged(hasWindowFocus)
+        if (skipWindowFocusChange) {
+            skipWindowFocusChange = false
+            return
+        }
         Logger.d(TAG, "onWindowFocusChanged -> hasWindowFocus: $hasWindowFocus")
         if (hasWindowFocus) {
             mCameraController?.onViewResumed()

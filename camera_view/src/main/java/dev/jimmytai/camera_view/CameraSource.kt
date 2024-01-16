@@ -123,7 +123,11 @@ class CameraSource(
         if (hasCamera) {
             if (cameraLifecycleOwner.lifecycle.currentState == Lifecycle.State.DESTROYED) return
             val camera: Camera =
-                cameraProvider.bindToLifecycle(cameraLifecycleOwner, cameraSelector, mPreview)
+                cameraProvider.bindToLifecycle(
+                    cameraLifecycleOwner,
+                    cameraSelector,
+                    mPreview
+                )
                     .also { mCamera = it }
             camera.cameraInfo.cameraState.observe(cameraLifecycleOwner) { state ->
                 Logger.d(TAG, "camera state: $state")

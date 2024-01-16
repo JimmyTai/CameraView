@@ -1,5 +1,6 @@
 package dev.jimmytai.camera_view.glthread
 
+import android.util.Size
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -34,8 +35,7 @@ class SurfaceViewGLThread(name: String, private val surfaceView: SurfaceView, ca
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         Logger.d(TAG, "surfaceChanged -> format: $format, width: $width, height: $height")
-        mSurfaceViewWidth = width
-        mSurfaceViewHeight = height
+        updateSurfaceConfigs(Size(width, height))
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
