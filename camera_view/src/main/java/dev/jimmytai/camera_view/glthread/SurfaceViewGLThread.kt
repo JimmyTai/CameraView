@@ -6,10 +6,17 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import dev.jimmytai.camera_view.gles.EglCore
 import dev.jimmytai.camera_view.gles.WindowSurface
+import dev.jimmytai.camera_view.interfaces.CameraTextureProcessor
 import dev.jimmytai.camera_view.utils.Logger
 
-class SurfaceViewGLThread(name: String, private val surfaceView: SurfaceView, callback: GLThreadCallback) :
-    GLThread(name, callback = callback), SurfaceHolder.Callback {
+class SurfaceViewGLThread(
+    name: String,
+    private val surfaceView: SurfaceView,
+    callback: GLThreadCallback,
+    cameraTextureProcessor: CameraTextureProcessor
+) :
+    GLThread(name, callback = callback, cameraTextureProcessor = cameraTextureProcessor),
+    SurfaceHolder.Callback {
 
     private var mSurface: Surface? = null
 
