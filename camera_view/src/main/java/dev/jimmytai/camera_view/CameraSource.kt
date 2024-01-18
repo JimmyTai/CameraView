@@ -73,8 +73,7 @@ class CameraSource(
                 try {
                     mCameraProvider = cameraProviderFuture.get()
                 } catch (e: Exception) {
-                    e.printStackTrace()
-                } catch (e: InterruptedException) {
+                    // TODO: report error to developer
                     e.printStackTrace()
                 }
 
