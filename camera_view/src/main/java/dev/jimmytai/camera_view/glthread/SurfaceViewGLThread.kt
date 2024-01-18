@@ -9,6 +9,11 @@ import dev.jimmytai.camera_view.gles.WindowSurface
 import dev.jimmytai.camera_view.interfaces.CameraTextureProcessor
 import dev.jimmytai.camera_view.utils.Logger
 
+/**
+ * SurfaceViewGLThread實作SurfaceView的interface，負責獲取SurfaceView的Surface與尺寸變化，並監聽生命週期
+ *
+ * 注意：SurfaceView的生命週期會在SurfaceView不可見時就destroy，可見時create
+ */
 class SurfaceViewGLThread(
     name: String,
     private val surfaceView: SurfaceView,

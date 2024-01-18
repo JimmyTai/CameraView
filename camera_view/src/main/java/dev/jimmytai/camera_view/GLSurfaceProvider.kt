@@ -10,6 +10,10 @@ import java.util.concurrent.Executors
 
 typealias OnCameraResolutionSelected = (resolution: Size, rotationDegrees: Int) -> Unit
 
+/**
+ * 主要負責將GLThread生成的SurfaceTexture提供給CameraX，讓相機資料可以輸出至SurfaceTexture中
+ * 後續GLThread就可以透過這個SurfaceTexture提取Texture做後續處理
+ */
 class GLSurfaceProvider(
     private val onCameraResolutionSelected: OnCameraResolutionSelected
 ) : Preview.SurfaceProvider {

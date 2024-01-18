@@ -43,12 +43,16 @@ abstract class GLThread(
         // 銷毀OpenGL環境
         const val RELEASE: Int = 2
 
+        // 更新相機相關的配置
         const val UPDATE_CAMERA_CONFIGS: Int = 3
 
+        // 更新Surface相關的配置
         const val UPDATE_SURFACE_CONFIGS: Int = 4
 
+        // 新增一個繪製窗口
         const val ADD_OUTPUT_SURFACE: Int = 5
 
+        // 移除一個繪製窗口
         const val REMOVE_OUTPUT_SURFACE: Int = 6
     }
 
@@ -66,28 +70,72 @@ abstract class GLThread(
         const val OPTION = "option"
     }
 
+    /**
+     * 負責在此執行序中獲取任務的Handler
+     */
     private var mHandler: Handler? = null
 
+    /**
+     * EGL的實例
+     */
     private var mEglCore: EglCore? = null
+
+    /**
+     * EGL的繪製窗口，透過Surface建立並綁定
+     *
+     * SwapBuffer時會將圖像資料輸出至Surface，達到繪製的目的
+     */
     private var mWindowSurface: WindowSurface? = null
 
+    /**
+     * OpenGL中與Texture相關的操作
+     */
     private var mGLRenderer: GLRenderer = GLRenderer()
 
+    /**
+     * 相機資料輸出的Texture
+     */
     private var mCameraOesTextureId: Int = -1
+
+    /**
+     * 提供給相機的SurfaceTexture，綁定[mCameraOesTextureId]
+     */
     private var mSurfaceTexture: SurfaceTexture? = null
 
+    /**
+     * 相機尺寸，也代表原始Texture尺寸
+     */
     private var mCameraSize: Size = Size(-1, -1)
+
+    /**
+     * 相機旋轉角度
+     */
     private var mCameraRotationDegrees: Int = 0
 
+    /**
+     * SurfaceView的尺寸，也代表最終繪製至螢幕的輸出尺寸
+     */
     private var mSurfaceViewSize: Size = Size(-1, -1)
 
+    /**
+     * SurfaceView中的 transform matrix
+     */
     private var mTransformMatrix: FloatArray = FloatArray(16)
 
+    /**
+     * 儲存額外的輸出窗口，Unique ID為Surface的hash code
+     */
     private var mOutputWindowSurfaces: MutableMap<Int, OutputWindowSurface> = mutableMapOf()
 
+    /**
+     * 目前GLThread渲染使用的相機尺寸
+     */
     val cameraSize: Size
         get() = mCameraSize
 
+    /**
+     * 目前GLThread渲染至螢幕的尺寸
+     */
     val surfaceViewSize: Size
         get() = mSurfaceViewSize
 
@@ -98,20 +146,32 @@ abstract class GLThread(
 
     abstract fun releaseInputData()
 
+    /**
+     * 通知GLThread初始化OpenGL與EGL的事件
+     */
     fun initGL() {
         mHandler?.sendEmptyMessage(INIT)
     }
 
+    /**
+     * 移除當前隊列的GLThread渲染事件
+     */
     fun pause() {
         mHandler?.removeMessages(PROCESS)
     }
 
+    /**
+     * 通知GLThread渲染的事件
+     */
     fun process() {
         // 因有時處理texture時間可能大於下一個frame available的時間，確保不會造成back pressure
         mHandler?.removeMessages(PROCESS)
         mHandler?.sendEmptyMessage(PROCESS)
     }
 
+    /**
+     * 通知GLThread釋放資源的事件
+     */
     fun release() {
         Logger.d(TAG, "release GLThread")
         mHandler?.removeMessages(UPDATE_CAMERA_CONFIGS)
@@ -121,6 +181,9 @@ abstract class GLThread(
         mHandler?.sendEmptyMessage(RELEASE)
     }
 
+    /**
+     * 通知GLThread更新相機配置的事件
+     */
     fun updateCameraConfigs(size: Size, rotationDegrees: Int) {
         Logger.d(
             TAG,
@@ -142,6 +205,9 @@ abstract class GLThread(
         mHandler?.sendMessage(message)
     }
 
+    /**
+     * 通知GLThread更新Surface配置的事件
+     */
     fun updateSurfaceConfigs(size: Size) {
         val message = Message().apply {
             what = UPDATE_SURFACE_CONFIGS
@@ -152,6 +218,9 @@ abstract class GLThread(
         mHandler?.sendMessage(message)
     }
 
+    /**
+     * 通知GLThread新增一個輸出窗口(Surface)的事件
+     */
     fun addOutputSurface(surface: Surface, surfaceOption: OutputSurfaceOption? = null) {
         val message = Message().apply {
             what = ADD_OUTPUT_SURFACE
@@ -163,6 +232,9 @@ abstract class GLThread(
         mHandler?.sendMessage(message)
     }
 
+    /**
+     * 通知GLThread移除一個輸出窗口(Surface)的事件
+     */
     fun removeOutputSurface(surface: Surface) {
         val message = Message().apply {
             what = REMOVE_OUTPUT_SURFACE
@@ -245,6 +317,9 @@ abstract class GLThread(
         }
     }
 
+    /**
+     * 初始化OpenGL與EGL，並創建一個SurfaceView準備提供給相機
+     */
     private fun onInitGL() {
         Logger.d(TAG, "onInitGL")
         var eglCore: EglCore? = mEglCore
@@ -257,6 +332,7 @@ abstract class GLThread(
         mWindowSurface = null
         mWindowSurface = createWindowSurface(eglCore)
 
+        // 如果沒有SurfaceTexture，創建一個
         if (mSurfaceTexture == null) {
             GlUtil.releaseTextureId(mCameraOesTextureId)
             mCameraOesTextureId = GlUtil.createExternalOESTextureId()
@@ -264,38 +340,59 @@ abstract class GLThread(
             val surfaceTexture = SurfaceTexture(mCameraOesTextureId)
             mSurfaceTexture = surfaceTexture
         }
+        // 通知外部SurfaceView已建立，可以綁定至相機
         callback.onCreateSurfaceTexture(mSurfaceTexture!!)
     }
 
+    /**
+     * 更新相機相關配置
+     */
     private fun onUpdateCameraConfigs(size: Size, rotationDegrees: Int) {
         mCameraSize = size
         mCameraRotationDegrees = rotationDegrees
     }
 
+    /**
+     * 更新Surface相關配置
+     */
     private fun onUpdateSurfaceConfigs(size: Size) {
         mSurfaceViewSize = size
     }
 
+    /**
+     * 新增一個輸出窗口(Surface)，並建立一個EGL繪製窗口(WindowSurface)
+     */
     private fun onAddOutputSurface(surface: Surface, option: OutputSurfaceOption?) {
         Logger.d(TAG, "onAddOutputSurface -> surface: ${surface.hashCode()}")
         val windowSurface = WindowSurface(mEglCore, surface, false)
         mOutputWindowSurfaces[surface.hashCode()] = OutputWindowSurface(windowSurface, option)
     }
 
+    /**
+     * 移除一個輸出窗口，並釋放EGL繪製窗口
+     */
     private fun onRemoveOutputSurface(surfaceHashCode: Int) {
         Logger.d(TAG, "onRemoveOutputSurface -> surface: $surfaceHashCode")
         mOutputWindowSurfaces[surfaceHashCode]?.windowSurface?.release()
         mOutputWindowSurfaces.remove(surfaceHashCode)
     }
 
+    /**
+     * 渲染流程
+     */
     private fun onProcess() {
         try {
             val windowSurface: WindowSurface = mWindowSurface ?: return
             val surfaceTexture: SurfaceTexture = mSurfaceTexture ?: return
 
+            // 從SurfaceTexture中更新當前Texture回來
             surfaceTexture.updateTexImage()
+            // 獲取SurfaceTexture目前的transform matrix
             surfaceTexture.getTransformMatrix(mTransformMatrix)
 
+            // 預渲染流程 -
+            //      return null 代表外部不處理，使用GLRenderer做旋轉與將畫面處理為鏡射畫面
+            //                  並將OES Texture轉為2D Texture
             val preProcessTextureId: Int = cameraTextureProcessor.onPreProcessTexture(
                 textureId = mCameraOesTextureId,
                 cameraSize = mCameraSize,
@@ -322,6 +419,8 @@ abstract class GLThread(
                 )
             }
 
+            // 提供給外部的渲染步驟
+            //      return null 代表外部不處理，直接使用原本的texture id
             val processedTextureId: Int = cameraTextureProcessor.onProcessTexture(
                 textureId = preProcessTextureId,
                 cameraSize = mCameraSize,
@@ -329,21 +428,28 @@ abstract class GLThread(
                 transformMatrix = mTransformMatrix
             ) ?: preProcessTextureId
 
+            // 將螢幕的繪製窗口與額外的繪製窗口 整合至同一個List，提供後續繪製至窗口
             val outputs: List<OutputWindowSurface> = mutableListOf<OutputWindowSurface>().apply {
                 this.addAll(mOutputWindowSurfaces.values)
                 this.add(DisplayWindowSurface(windowSurface))
             }
 
+            // 儲存當前螢幕繪製窗口的資訊
             saveRenderState()
 
             for (output in outputs) {
 
                 if (output is DisplayWindowSurface) {
+                    // 回復當前螢幕繪製窗口的資訊
                     restoreRenderState()
                 } else {
+                    // 切換至額外的EGL繪製窗口
                     output.windowSurface.makeCurrent()
                 }
 
+                // 渲染至窗口的處理
+                //      return false 代表外部不處理，使用預設的繪製操作
+                //             true  代表外部已處理，不需額外操作
                 val handled: Boolean = cameraTextureProcessor.onRenderTexture(
                     textureId = processedTextureId,
                     cameraSize = mCameraSize,
@@ -354,6 +460,7 @@ abstract class GLThread(
                 )
 
                 if (!handled) {
+                    // 預設的繪製上屏操作
                     if (!GLES20.glIsTexture(processedTextureId)) {
                         Logger.e(TAG, "output texture not a valid texture")
                         return
@@ -366,17 +473,16 @@ abstract class GLThread(
                                 rotation = 0,
                                 textureSize = mCameraSize,
                                 surfaceSize = output.option?.outputSize ?: mSurfaceViewSize,
-//                                surfaceSize = Size(720, 1280)
                             )
                     mGLRenderer.transferTextureToScreen(
                         textureId = processedTextureId,
                         srcTextureFormat = TextureFormat.Texture2D,
                         surfaceSize = output.option?.outputSize ?: mSurfaceViewSize,
-//                        surfaceSize = Size(720, 1280),
                         mvpMatrix = onScreenTransition.matrix
                     )
                 }
 
+                // 將Texture資料輸出至EGL繪製窗口
                 output.windowSurface.swapBuffers()
             }
 
@@ -411,28 +517,36 @@ abstract class GLThread(
         }
     }
 
+    // 釋放GLThread使用的資源
     private fun onRelease() {
         Logger.d(TAG, "onRelease: ${Thread.currentThread().name}")
         releaseInputData()
 
+        // 釋放額外的EGL繪製窗口資源
         for (outputWindowSurface in mOutputWindowSurfaces.values) {
             outputWindowSurface.windowSurface.release()
         }
         mOutputWindowSurfaces.clear()
 
+        // 釋放Texture操作的資源
         mGLRenderer.release()
 
+        // 釋放螢幕繪製窗口的資源
         mWindowSurface?.release()
         mWindowSurface = null
 
+        // 釋放SurfaceTexture的資源
         mSurfaceTexture?.release()
         mSurfaceTexture = null
 
+        // 釋放綁定在SurfaceTexture中的Texture
         GlUtil.releaseTextureId(mCameraOesTextureId)
 
+        // 釋放EGL的資源
         mEglCore?.release()
         mEglCore = null
 
+        // 關閉GLThread的Handler，GLThread將停止
         mHandler?.looper?.quit()
         mHandler = null
     }

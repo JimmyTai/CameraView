@@ -31,6 +31,9 @@ class CameraSource(
     private var mPreview: Preview? = null
     private var mCamera: Camera? = null
 
+    val isPreviewing: Boolean
+        get() = mCamera?.cameraInfo != null
+
     val cameraInfo: CameraInfo?
         get() = mCamera?.cameraInfo
 

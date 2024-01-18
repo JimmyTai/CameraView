@@ -109,6 +109,11 @@ internal fun VideoRecorderConfig.createRecorder(
     } else {
         MediaRecorder()
     }.apply {
+        /*
+         * [Important] - Don't adjust the sequence of these functions.
+         *
+         * It will report IllegalStateException when the order is incorrect.
+         */
         setVideoSource(MediaRecorder.VideoSource.SURFACE)
         setAudioSource(MediaRecorder.AudioSource.MIC)
 

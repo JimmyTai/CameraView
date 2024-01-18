@@ -1,7 +1,6 @@
 package dev.jimmytai.camera_view.model
 
 import android.graphics.Point
-import android.util.Log
 import android.util.Size
 
 data class RecorderViewPort(val point: Point, val size: Size) {
