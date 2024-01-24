@@ -41,6 +41,7 @@ class CameraView(context: Context, attrs: AttributeSet?, defStyleAttr: Int, defS
         cameraController.attachFromView(surfaceView)
     }
 
+    // 因為是要判斷使否從背景回到前景，所以忽略View created後首次的 focus change
     private var skipWindowFocusChange = true
 
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Point
 import android.opengl.GLES20
 import android.opengl.Matrix
+import android.util.Size
 import dev.jimmytai.camera_view.constant.CropScaleType
 import dev.jimmytai.camera_view.constant.PixelFormat
 import dev.jimmytai.camera_view.constant.TextureFormat
@@ -49,8 +50,8 @@ class GLRenderer {
      * @param height 纹理高度
      * @return 纹理ID
      */
-    fun prepareTexture(width: Int, height: Int): Int {
-        initFrameBufferIfNeed(width, height)
+    fun prepareTexture(size: Size): Int {
+        initFrameBufferIfNeed(size)
         return mFrameBufferTextures!![0]
     }
 
@@ -60,9 +61,9 @@ class GLRenderer {
      * @param width  缓冲的纹理宽度
      * @param height 缓冲的纹理高度
      */
-    private fun initFrameBufferIfNeed(width: Int, height: Int) {
+    private fun initFrameBufferIfNeed(size: Size) {
         var need = false
-        if (mFrameBufferShape?.x != width || mFrameBufferShape?.y != height) {
+        if (mFrameBufferShape?.x != size.width || mFrameBufferShape?.y != size.height) {
             need = true
         }
         if (mFrameBuffers == null || mFrameBufferTextures == null) {
@@ -80,11 +81,10 @@ class GLRenderer {
                 bindFrameBuffer(
                     textureId = frameBufferTextures[i],
                     frameBuffer = frameBuffers[i],
-                    width,
-                    height
+                    size
                 )
             }
-            mFrameBufferShape = Point(width, height)
+            mFrameBufferShape = Point(size.width, size.height)
         }
     }
 
@@ -93,10 +93,10 @@ class GLRenderer {
      * set texture params
      * and bind buffer
      */
-    private fun bindFrameBuffer(textureId: Int, frameBuffer: Int, width: Int, height: Int) {
+    private fun bindFrameBuffer(textureId: Int, frameBuffer: Int, size: Size) {
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
         GLES20.glTexImage2D(
-            GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height, 0,
+            GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, size.width, size.height, 0,
             GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, null
         )
         GLES20.glTexParameterf(
@@ -168,7 +168,7 @@ class GLRenderer {
      */
     fun transferTextureToTexture(
         inputTextureId: Int, inputTextureFormat: TextureFormat, outputTextureFormat: TextureFormat,
-        width: Int, height: Int, transition: Transition
+        size: Size, transition: Transition
     ): Int {
         if (outputTextureFormat != TextureFormat.Texture2D) {
             Logger.e(
@@ -181,8 +181,8 @@ class GLRenderer {
         val targetRotated: Boolean = (transition.angle % 180 == 90)
         return programManager.getProgram(inputTextureFormat).drawFrameOffScreen(
             inputTextureId,
-            if (targetRotated) height else width,
-            if (targetRotated) width else height,
+            if (targetRotated) size.height else size.width,
+            if (targetRotated) size.width else size.height,
             transition.matrix
         )
     }
@@ -191,8 +191,7 @@ class GLRenderer {
         inputTextureId: Int,
         inputTextureFormat: TextureFormat,
         outputTextureFormat: TextureFormat,
-        width: Int,
-        height: Int,
+        size: Size,
         transition: Transition,
         mUVMatrix: FloatArray
     ): Int {
@@ -211,16 +210,16 @@ class GLRenderer {
             // 传入uv matrix，该矩阵从视频流中获取，仅在oes转2d纹理时会使用
             return oesProgram.drawFrameOffscreen(
                 inputTextureId,
-                if (targetRotated) height else width,
-                if (targetRotated) width else height,
+                if (targetRotated) size.height else size.width,
+                if (targetRotated) size.width else size.height,
                 transition.matrix,
                 mUVMatrix
             )
         }
         return programManager.getProgram(inputTextureFormat).drawFrameOffScreen(
             inputTextureId,
-            if (targetRotated) height else width,
-            if (targetRotated) width else height,
+            if (targetRotated) size.height else size.width,
+            if (targetRotated) size.width else size.height,
             transition.matrix
         )
     }
@@ -238,8 +237,7 @@ class GLRenderer {
         textureId: Int,
         inputTextureFormat: TextureFormat,
         outputPixelFormat: PixelFormat,
-        width: Int,
-        height: Int,
+        size: Size,
         ratio: Float
     ): ByteBuffer? {
         if (outputPixelFormat != PixelFormat.RGBA8888) {
@@ -250,24 +248,22 @@ class GLRenderer {
             return null
         }
         return programManager.getProgram(inputTextureFormat)
-            .readBuffer(textureId, (width * ratio).toInt(), (height * ratio).toInt())
+            .readBuffer(textureId, (size.width * ratio).toInt(), (size.height * ratio).toInt())
     }
 
     fun transferTextureToBitmap(
         textureId: Int,
         inputTextureFormat: TextureFormat,
-        width: Int,
-        height: Int
+        size: Size
     ): Bitmap? {
         val buffer: ByteBuffer = transferTextureToBuffer(
             textureId,
             inputTextureFormat,
             PixelFormat.RGBA8888,
-            width,
-            height,
+            size,
             1.0f
         ) ?: return null
-        return transferBufferToBitmap(buffer, PixelFormat.RGBA8888, width, height)
+        return transferBufferToBitmap(buffer, PixelFormat.RGBA8888, size)
     }
 
     /**
@@ -281,8 +277,7 @@ class GLRenderer {
     fun transferBufferToBitmap(
         buffer: ByteBuffer,
         pixelFormat: PixelFormat,
-        width: Int,
-        height: Int
+        size: Size,
     ): Bitmap? {
         if (pixelFormat != PixelFormat.RGBA8888) {
             Logger.e(
@@ -292,7 +287,7 @@ class GLRenderer {
             return null
         }
 
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
 
         buffer.position(0)
         bitmap.copyPixelsFromBuffer(buffer)
@@ -315,8 +310,7 @@ class GLRenderer {
         buffer: ByteBuffer,
         inputPixelFormat: PixelFormat,
         outputTextureFormat: TextureFormat,
-        width: Int,
-        height: Int,
+        size: Size,
         consistent: Boolean
     ): Int {
         if (inputPixelFormat != PixelFormat.RGBA8888) {
@@ -343,14 +337,13 @@ class GLRenderer {
             }
             textureId = textureIds[0]
         }
-        create2DTexture(buffer, width, height, GLES20.GL_RGBA, textureId)
+        create2DTexture(buffer, size, GLES20.GL_RGBA, textureId)
         return textureId
     }
 
     private fun create2DTexture(
         data: ByteBuffer,
-        width: Int,
-        height: Int,
+        size: Size,
         @Suppress("SameParameterValue") format: Int,
         textureHandle: Int
     ) {
@@ -379,7 +372,7 @@ class GLRenderer {
         // Load the data from the buffer into the texture handle.
         GLES20.glTexImage2D(
             GLES20.GL_TEXTURE_2D, 0, format,
-            width, height, 0, format, GLES20.GL_UNSIGNED_BYTE, data
+            size.width, size.height, 0, format, GLES20.GL_UNSIGNED_BYTE, data
         )
         GlUtil.checkGlError("loadImageTexture")
     }
@@ -387,12 +380,11 @@ class GLRenderer {
     fun transferTextureToScreen(
         textureId: Int,
         srcTextureFormat: TextureFormat,
-        surfaceWidth: Int,
-        surfaceHeight: Int,
-        mMVPMatrix: FloatArray
+        surfaceSize: Size,
+        mvpMatrix: FloatArray
     ) {
         programManager.getProgram(srcTextureFormat)
-            .drawFrameOnScreen(textureId, surfaceWidth, surfaceHeight, mMVPMatrix)
+            .drawFrameOnScreen(textureId, surfaceSize.width, surfaceSize.height, mvpMatrix)
     }
 
     class Transition {
@@ -429,18 +421,20 @@ class GLRenderer {
         }
 
         fun crop(
-            scaleType: CropScaleType, rotation: Int,
-            textureWidth: Int, textureHeight: Int, surfaceWidth: Int, surfaceHeight: Int
+            scaleType: CropScaleType,
+            rotation: Int,
+            textureSize: Size,
+            surfaceSize: Size
         ): Transition {
             if (rotation % 180 == 90) {
                 Matrix4Util.crop(
                     mMVPMatrix, scaleType,
-                    textureHeight, textureWidth, surfaceWidth, surfaceHeight
+                    textureSize.height, textureSize.width, surfaceSize.width, surfaceSize.height
                 )
             } else {
                 Matrix4Util.crop(
                     mMVPMatrix, scaleType,
-                    textureWidth, textureHeight, surfaceWidth, surfaceHeight
+                    textureSize.width, textureSize.height, surfaceSize.width, surfaceSize.height
                 )
             }
             return this

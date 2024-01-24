@@ -1,9 +1,12 @@
 package dev.jimmytai.example.camera_view
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.opengl.GLES20
 import android.os.Bundle
+import android.os.Environment
+import android.util.Log
 import android.util.Size
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -31,10 +34,16 @@ import androidx.core.content.ContextCompat
 import dev.jimmytai.camera_view.CameraController
 import dev.jimmytai.camera_view.CameraView
 import dev.jimmytai.camera_view.interfaces.CameraTextureProcessor
+import dev.jimmytai.camera_view.model.RecorderViewPort
+import dev.jimmytai.camera_view.recorder.VideoRecorderConfig
 import dev.jimmytai.example.camera_view.ui.theme.CameraViewTheme
 import org.wysaid.nativePort.CGEFrameRenderer
+import java.io.File
 
 class MainActivity : ComponentActivity(), CameraTextureProcessor {
+    companion object {
+        private val TAG: String = MainActivity::class.java.simpleName
+    }
 
     private enum class BeautyEffectEngine {
         NONE, DEFAULT
@@ -42,20 +51,20 @@ class MainActivity : ComponentActivity(), CameraTextureProcessor {
 
     private val mCameraView: CameraView by lazy { CameraView(this) }
 
-    private val mCameraController = CameraController(this, Size(1080, 720))
+    private val mCameraController = CameraController(this, Size(1080, 720), this)
 
-    private val mCameraPermissionRequest: ActivityResultLauncher<String> =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) {
-                mCameraController.startPreview()
-            } else {
-                Toast.makeText(this, "Please grant camera permission", Toast.LENGTH_SHORT)
+    private val mCameraPermissionRequest: ActivityResultLauncher<Array<String>> =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grantedList ->
+            if (grantedList.any { !it.value }) {
+                Toast.makeText(this, "Please grant camera and audio permission", Toast.LENGTH_SHORT)
                     .show()
+            } else {
+                mCameraController.startPreview()
             }
         }
 
-    private var mBeautyEffectEngineAttempt: BeautyEffectEngine? = null
     private var mBeautyEffectEngine: BeautyEffectEngine = BeautyEffectEngine.DEFAULT
+    private var mBeautyEffectEngineAttempt: BeautyEffectEngine? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,20 +76,14 @@ class MainActivity : ComponentActivity(), CameraTextureProcessor {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    BeautyEffectCamera(mCameraView, mCameraController) {
-                        when (mBeautyEffectEngine) {
+                    BeautyEffectCamera(this, mCameraView, mCameraController) {
+                        mBeautyEffectEngineAttempt = when (mBeautyEffectEngine) {
                             BeautyEffectEngine.NONE -> {
-                                mBeautyEffectEngineAttempt = BeautyEffectEngine.DEFAULT
-                                mCameraController.setCameraTextureProcessor(
-                                    this,
-                                    preProcessEnable = false,
-                                    renderOnScreenEnable = false
-                                )
+                                BeautyEffectEngine.DEFAULT
                             }
 
                             BeautyEffectEngine.DEFAULT -> {
-                                mBeautyEffectEngineAttempt = BeautyEffectEngine.NONE
-                                mCameraController.setCameraTextureProcessor(this)
+                                BeautyEffectEngine.NONE
                             }
                         }
                     }
@@ -89,19 +92,6 @@ class MainActivity : ComponentActivity(), CameraTextureProcessor {
         }
 
         mCameraView.setController(mCameraController)
-        when (mBeautyEffectEngine) {
-            BeautyEffectEngine.NONE -> {
-                mCameraController.setCameraTextureProcessor(this)
-            }
-
-            BeautyEffectEngine.DEFAULT -> {
-                mCameraController.setCameraTextureProcessor(
-                    this,
-                    preProcessEnable = false,
-                    renderOnScreenEnable = false
-                )
-            }
-        }
         startCameraPreview(mCameraController)
     }
 
@@ -113,7 +103,12 @@ class MainActivity : ComponentActivity(), CameraTextureProcessor {
         ) {
             cameraController.startPreview()
         } else {
-            mCameraPermissionRequest.launch(Manifest.permission.CAMERA)
+            mCameraPermissionRequest.launch(
+                arrayOf(
+                    Manifest.permission.CAMERA,
+                    Manifest.permission.RECORD_AUDIO
+                )
+            )
         }
     }
 
@@ -126,62 +121,119 @@ class MainActivity : ComponentActivity(), CameraTextureProcessor {
     }
 
     private var mCameraSize: Size? = null
-    private var mSurfaceSize: Size? = null
+    private var mTextureSize: Size? = null
     private var mFrameRenderer: CGEFrameRenderer? = null
+
+    override fun onPreProcessTexture(
+        textureId: Int,
+        cameraSize: Size,
+        textureSize: Size,
+        transformMatrix: FloatArray
+    ): Int? =
+        when (mBeautyEffectEngine) {
+            BeautyEffectEngine.NONE -> null
+            BeautyEffectEngine.DEFAULT -> {
+                if (mFrameRenderer == null || mCameraSize != cameraSize || mTextureSize != textureSize) {
+                    mCameraSize = cameraSize
+                    mTextureSize = textureSize
+                    mFrameRenderer?.release()
+                    mFrameRenderer = CGEFrameRenderer().also {
+                        val filterConfig =
+                            FilterConfig.values()[FilterConfig.FILTER_NONE.ordinal].configString(
+                                true
+                            )
+                        it.init(
+                            cameraSize.width,
+                            cameraSize.height,
+                            cameraSize.width,
+                            cameraSize.height
+                        )
+                        it.setFilterWidthConfig(filterConfig)
+                        // 水平翻轉
+                        // it.setSrcFlipScale(1.0f, 1.0f)
+                        // it.setRenderFlipScale(-1.0f, 1.0f)
+
+                        GLES20.glDisable(GLES20.GL_DEPTH_TEST)
+                        GLES20.glDisable(GLES20.GL_STENCIL_TEST)
+                        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+                    }
+                    Log.d(
+                        TAG,
+                        "CGEFrameRenderer created -> camera size: $cameraSize, texture size: $textureSize"
+                    )
+                }
+                textureId
+            }
+        }
 
     override fun onProcessTexture(
         textureId: Int,
         cameraSize: Size,
-        surfaceSize: Size,
+        textureSize: Size,
         transformMatrix: FloatArray
-    ): Int {
-        if (mBeautyEffectEngine == BeautyEffectEngine.DEFAULT) {
-            if (mFrameRenderer == null || mCameraSize != cameraSize || mSurfaceSize != surfaceSize) {
-                mFrameRenderer?.release()
-                mFrameRenderer = CGEFrameRenderer().also {
-                    val filterConfig =
-                        FilterConfig.values()[FilterConfig.FILTER_NONE.ordinal].configString(
-                            true
-                        )
-                    it.init(
-                        cameraSize.width,
-                        cameraSize.height,
-                        surfaceSize.width,
-                        surfaceSize.height
-                    )
-                    it.setFilterWidthConfig(filterConfig)
-                    // 水平翻轉
-                    // it.setSrcFlipScale(1.0f, 1.0f)
-                    // it.setRenderFlipScale(-1.0f, 1.0f)
+    ): Int? =
+        when (mBeautyEffectEngine) {
+            BeautyEffectEngine.NONE -> null
+            BeautyEffectEngine.DEFAULT -> {
+                val frameRenderer: CGEFrameRenderer? = mFrameRenderer
+                if (frameRenderer != null) {
+                    frameRenderer.update(textureId, transformMatrix)
+                    frameRenderer.runProc()
 
-                    GLES20.glDisable(GLES20.GL_DEPTH_TEST)
-                    GLES20.glDisable(GLES20.GL_STENCIL_TEST)
-                    GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+                    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+                    GLES20.glClearColor(0f, 0f, 0f, 0f)
+                    GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                 }
-            }
-            val frameRenderer: CGEFrameRenderer? = mFrameRenderer
-            if (frameRenderer != null) {
-                frameRenderer.update(textureId, transformMatrix)
-                frameRenderer.runProc()
-
-                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
-                GLES20.glClearColor(0f, 0f, 0f, 0f)
-                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
-                frameRenderer.render(0, 0, surfaceSize.width, surfaceSize.height)
+                textureId
             }
         }
-        val beautyEffectEngineAttempt: BeautyEffectEngine? = mBeautyEffectEngineAttempt
-        if (beautyEffectEngineAttempt != null) {
-            val frameRenderer: CGEFrameRenderer? = mFrameRenderer
-            if (frameRenderer != null) {
-//                    frameRenderer.update(0, transformMatrix)
-                frameRenderer.release()
-                mFrameRenderer = null
+
+    override fun onRenderTexture(
+        textureId: Int,
+        cameraSize: Size,
+        textureSize: Size,
+        surfaceSize: Size,
+        transformMatrix: FloatArray,
+        isDisplayWindow: Boolean
+    ): Boolean =
+        when (mBeautyEffectEngine) {
+            BeautyEffectEngine.NONE -> false
+            BeautyEffectEngine.DEFAULT -> {
+                val viewPort = RecorderViewPort.create(cameraSize, surfaceSize, true)
+                mFrameRenderer?.render(
+                    viewPort.point.x,
+                    viewPort.point.y,
+                    viewPort.size.width,
+                    viewPort.size.height
+                )
+                true
             }
+        }
+
+    override fun onProcessEnd(
+        cameraSize: Size,
+        surfaceSize: Size,
+    ) {
+        val beautyEffectEngineAttempt: BeautyEffectEngine = mBeautyEffectEngineAttempt ?: return
+        val handled: Boolean = when (beautyEffectEngineAttempt) {
+            BeautyEffectEngine.NONE -> {
+                val frameRenderer: CGEFrameRenderer? = mFrameRenderer
+                if (frameRenderer != null) {
+                    frameRenderer.release()
+                    mFrameRenderer = null
+                    Log.d(TAG, "CGEFrameRenderer released")
+                }
+                true
+            }
+
+            BeautyEffectEngine.DEFAULT -> {
+                true
+            }
+        }
+        if (handled) {
             mBeautyEffectEngineAttempt = null
             mBeautyEffectEngine = beautyEffectEngineAttempt
         }
-        return textureId
     }
 }
 
@@ -189,11 +241,14 @@ typealias OnBeautyEffectChange = () -> Unit
 
 @Composable
 fun BeautyEffectCamera(
+    context: Context,
     cameraView: CameraView,
     cameraController: CameraController,
     onBeautyEffectChange: OnBeautyEffectChange,
 ) {
     val cameraState: MutableState<Boolean> = remember { mutableStateOf(true) }
+
+    val recordState: MutableState<Boolean> = remember { mutableStateOf(false) }
 
     Box {
         AndroidView(
@@ -201,6 +256,31 @@ fun BeautyEffectCamera(
             factory = {
                 cameraView
             })
+        Button(
+            onClick = {
+                if (recordState.value) {
+                    cameraController.stopRecord()
+                } else {
+                    val file = File(
+                        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                        "camera_view_recording_file.mp4"
+                    )
+                    Log.d("MainActivity", "record file path: $file")
+                    val recorderConfig = VideoRecorderConfig.Builder().build()
+                    cameraController.startRecord(
+                        file.toString(),
+                        outputSize = Size(720, 1280),
+                        recorderConfig
+                    )
+                }
+                recordState.value = !recordState.value
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 112.dp, end = 16.dp)
+        ) {
+            Text(text = if (!recordState.value) "Record" else "Recording")
+        }
         Button(
             onClick = {
                 if (cameraState.value) {
@@ -234,10 +314,40 @@ fun BeautyEffectCamera(
 @Composable
 fun BeautyEffectCameraPreview() {
     val cameraView = CameraView(LocalContext.current)
-    val cameraController = CameraController(LocalContext.current, Size(1080, 720))
+    val cameraController =
+        CameraController(LocalContext.current, Size(1080, 720), object : CameraTextureProcessor {
+            override fun onPreProcessTexture(
+                textureId: Int,
+                cameraSize: Size,
+                textureSize: Size,
+                transformMatrix: FloatArray
+            ): Int? = null
+
+            override fun onProcessTexture(
+                textureId: Int,
+                cameraSize: Size,
+                textureSize: Size,
+                transformMatrix: FloatArray
+            ): Int? = null
+
+            override fun onRenderTexture(
+                textureId: Int,
+                cameraSize: Size,
+                textureSize: Size,
+                surfaceSize: Size,
+                transformMatrix: FloatArray,
+                isDisplayWindow: Boolean
+            ): Boolean = false
+
+            override fun onProcessEnd(
+                cameraSize: Size,
+                surfaceSize: Size,
+            ) {
+            }
+        })
 
     CameraViewTheme {
-        BeautyEffectCamera(cameraView, cameraController) {}
+        BeautyEffectCamera(LocalContext.current, cameraView, cameraController) {}
     }
 }
 
